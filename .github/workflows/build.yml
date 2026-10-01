@@ -1,0 +1,47 @@
+name: Build Notely installer
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Tauri installer
+        run: npm run tauri:build
+        env:
+          CI: true
+
+      - name: Upload installers and portable executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: notely-windows-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/notely.exe
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.exe
