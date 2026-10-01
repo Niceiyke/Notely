@@ -1,0 +1,22 @@
+[package]
+name = "notely"
+version = "0.1.0"
+description = "A small personal text editor"
+authors = ["Notely"]
+edition = "2021"
+
+[lib]
+name = "notely_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
