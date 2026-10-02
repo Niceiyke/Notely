@@ -25,6 +25,13 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/64x64.png",
+      "icons/128x128.png",
+      "icons/icon.ico",
+      "icons/icon.icns"
+    ],
     "category": "Productivity",
     "shortDescription": "A focused personal text editor",
     "longDescription": "Notely is a lightweight personal text editor."
