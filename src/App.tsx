@@ -11,7 +11,7 @@ import { rust } from '@codemirror/lang-rust'
 import { markdown } from '@codemirror/lang-markdown'
 import { python } from '@codemirror/lang-python'
 import { oneDark } from '@codemirror/theme-one-dark'
-import { FilePlus2, FolderOpen, Save, Search, Moon, Sun, WrapText, X, FileText, Replace, Check, Settings } from 'lucide-react'
+import { FilePlus2, FolderOpen, Save, Search, Moon, Sun, WrapText, X, FileText, Replace, Check, Settings, Trash2 } from 'lucide-react'
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { readTextFile, writeTextFile, readDir, mkdir, remove, rename } from '@tauri-apps/plugin-fs'
 import { isTauri as tauriIsTauri } from '@tauri-apps/api/core'
@@ -92,7 +92,12 @@ export default function App() {
   searchQueryRef.current = query
   const [replaceWith, setReplaceWith] = useState('')
   const [status, setStatus] = useState('Ready')
-  const [recentFiles, setRecentFiles] = useState<string[]>(() => JSON.parse(localStorage.getItem('notely-recent-files') || '[]'))
+  const [recentFiles, setRecentFiles] = useState<string[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('notely-recent-files') || '[]')
+      return Array.isArray(saved) ? saved.filter((path): path is string => typeof path === 'string').slice(0, 8) : []
+    } catch { return [] }
+  })
   const [recentOpen, setRecentOpen] = useState(false)
   const [folderPath, setFolderPath] = useState<string | null>(null)
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null)
@@ -211,6 +216,12 @@ export default function App() {
   const deleteExplorerEntry = async (entry: { path: string; name: string }) => { if (!window.confirm(`Delete ${entry.name}?`)) return; await remove(entry.path, { recursive: true }); await refreshExplorer() }
 
   const openRecentFile = async (path: string) => {
+    const alreadyOpen = tabs.find(tab => tab.path === path)
+    if (alreadyOpen) {
+      setActiveId(alreadyOpen.id)
+      setRecentOpen(false)
+      return
+    }
     try {
       const content = await readTextFile(path)
       const name = path.split(/[\\/]/).pop() || 'Untitled.txt'
@@ -410,7 +421,7 @@ export default function App() {
         <button title="New file" onClick={newFile}><FilePlus2 size={17} /><span>New</span></button>
         <button title="Open file" onClick={() => isTauri() ? openNativeFile() : fileInputRef.current?.click()}><FolderOpen size={17} /><span>Open</span></button>
         {isTauri() && <button title="Open folder" onClick={() => void openFolder()}><FolderOpen size={17} /><span>Folder</span></button>}
-        {isTauri() && <div className="recent-wrap"><button title="Recent files" className={recentOpen ? 'selected' : ''} onClick={() => setRecentOpen(value => !value)}>Recent</button>{recentOpen && <div className="recent-menu">{recentFiles.length === 0 ? <span>No recent files</span> : recentFiles.map(path => <button key={path} onClick={() => void openRecentFile(path)}>{path}</button>)}</div>}</div>}
+        {isTauri() && <div className="recent-wrap"><button title="Recent files" className={recentOpen ? 'selected' : ''} onClick={() => setRecentOpen(value => !value)}>Recent</button>{recentOpen && <div className="recent-menu">{recentFiles.length === 0 ? <span>No recent files</span> : <>{recentFiles.map(path => <div className="recent-item" key={path}><button title={`Open ${path}`} onClick={() => void openRecentFile(path)}>{path}</button><button className="recent-remove" title="Remove from recent files" aria-label={`Remove ${path} from recent files`} onClick={() => { const next = recentFiles.filter(item => item !== path); setRecentFiles(next); localStorage.setItem('notely-recent-files', JSON.stringify(next)) }}><X size={14} /></button></div>)}<button className="recent-clear" onClick={() => { setRecentFiles([]); localStorage.removeItem('notely-recent-files') }}><Trash2 size={13} /> Clear recent files</button></>}</div>}</div>}
         <button title="Save file (Ctrl+S)" onClick={saveFile}><Save size={17} /><span>Save</span></button>
         <button title="Save As (Ctrl+Shift+S)" onClick={saveFileAs}><Save size={17} /><span>Save As</span></button>
         <button title="Format document (Shift+Alt+F)" onClick={() => void formatDocument()}><span>Format</span></button>
