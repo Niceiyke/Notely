@@ -33,4 +33,12 @@ To build an installable desktop bundle:
 npm run tauri:build
 ```
 
-The desktop shell is now configured in `src-tauri/`. Native file dialogs and real file-system saving are the next native integration step.
+The desktop shell is configured in `src-tauri/`. Native file dialogs and real file-system saving are available.
+
+## Cloud workspaces (optional)
+
+1. Create a Supabase project and apply `supabase/migrations/20260615000000_cloud_workspaces.sql` in its SQL editor.
+2. Copy `.env.example` to `.env.local` and set the project's URL and anon key.
+3. Restart Notely, open the cloud panel, create an account, and sign in. Create a workspace, then sync your open tabs. Sign in on another computer, select that workspace, and open its cloud documents.
+
+Cloud documents are copies managed by Notely; syncing writes the currently open tabs into the selected workspace. RLS policies restrict groups and documents to their owner. Local filesystem files remain local until opened as tabs and explicitly synced.

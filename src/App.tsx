@@ -11,10 +11,12 @@ import { rust } from '@codemirror/lang-rust'
 import { markdown } from '@codemirror/lang-markdown'
 import { python } from '@codemirror/lang-python'
 import { oneDark } from '@codemirror/theme-one-dark'
-import { FilePlus2, FolderOpen, Save, Search, Moon, Sun, WrapText, X, FileText, Replace, Check, Settings, Trash2 } from 'lucide-react'
+import { FilePlus2, FolderOpen, Save, Search, Moon, Sun, WrapText, X, FileText, Replace, Check, Settings, Trash2, Cloud } from 'lucide-react'
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { readTextFile, writeTextFile, readDir, mkdir, remove, rename } from '@tauri-apps/plugin-fs'
 import { isTauri as tauriIsTauri } from '@tauri-apps/api/core'
+import CloudWorkspace from './CloudWorkspace'
+import type { CloudDocument } from './lib/supabase'
 import * as prettier from 'prettier/standalone'
 import * as babelPlugin from 'prettier/plugins/babel'
 import * as typescriptPlugin from 'prettier/plugins/typescript'
@@ -23,7 +25,7 @@ import * as markdownPlugin from 'prettier/plugins/markdown'
 import * as postcssPlugin from 'prettier/plugins/postcss'
 import * as htmlPlugin from 'prettier/plugins/html'
 
-type DocumentTab = { id: number; name: string; content: string; dirty: boolean; path?: string }
+type DocumentTab = { id: number; name: string; content: string; dirty: boolean; path?: string; cloudId?: string }
 
 const isTauri = () => tauriIsTauri()
 const starter = `Welcome to Notely.\n\nA small, focused text editor for your notes.\n\nStart typing, or open a file from your computer.`
@@ -84,6 +86,7 @@ export default function App() {
   const [dark, setDark] = useState(true)
   const [wrap, setWrap] = useState(true)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [cloudOpen, setCloudOpen] = useState(false)
   const [fontSize, setFontSize] = useState(() => Number(localStorage.getItem('notely-font-size') || 13))
   const [tabSize, setTabSize] = useState(() => Number(localStorage.getItem('notely-tab-size') || 2))
   const [searchOpen, setSearchOpen] = useState(false)
@@ -428,9 +431,16 @@ export default function App() {
         <span className="divider" />
         <button className={searchOpen ? 'selected' : ''} title="Find and replace" onClick={() => setSearchOpen(value => !value)}><Search size={17} /><span>Find</span></button>
       </nav>
-      <div className="actions"><button title="Toggle word wrap" className={wrap ? 'selected' : ''} onClick={() => setWrap(value => !value)}><WrapText size={17} /></button><button title="Toggle theme" onClick={() => setDark(value => !value)}>{dark ? <Sun size={17} /> : <Moon size={17} />}</button><button title="Editor settings" className={settingsOpen ? 'selected' : ''} onClick={() => setSettingsOpen(value => !value)}><Settings size={17} /></button></div>
+      <div className="actions"><button title="Cloud workspaces" className={cloudOpen ? 'selected' : ''} onClick={() => setCloudOpen(value => !value)}><Cloud size={17}/></button><button title="Toggle word wrap" className={wrap ? 'selected' : ''} onClick={() => setWrap(value => !value)}><WrapText size={17} /></button><button title="Toggle theme" onClick={() => setDark(value => !value)}>{dark ? <Sun size={17} /> : <Moon size={17} />}</button><button title="Editor settings" className={settingsOpen ? 'selected' : ''} onClick={() => setSettingsOpen(value => !value)}><Settings size={17} /></button></div>
       <input ref={fileInputRef} type="file" hidden onChange={event => { const file = event.target.files?.[0]; if (file) openFile(file); event.target.value = '' }} />
     </header>
+    {cloudOpen && <CloudWorkspace tabs={tabs} onSetCloudId={(tabId, cloudId) => setTabs(current => current.map(tab => tab.id === tabId ? { ...tab, cloudId } : tab))} onOpen={document => {
+      const existing = tabs.find(tab => tab.cloudId === document.id)
+      if (existing) { setActiveId(existing.id); return }
+      const id = Date.now()
+      setTabs(current => [...current, { id, name: document.name, content: document.content, cloudId: document.id, dirty: false }])
+      setActiveId(id); setStatus(`Opened cloud document ${document.name}`)
+    }} />}
     {settingsOpen && <aside className="settings-panel"><div className="settings-title">Editor settings</div><label>Font size <output>{fontSize}px</output><input type="range" min="10" max="24" value={fontSize} onChange={event => setFontSize(Number(event.target.value))} /></label><label>Tab size <select value={tabSize} onChange={event => setTabSize(Number(event.target.value))}><option value={2}>2 spaces</option><option value={4}>4 spaces</option><option value={8}>8 spaces</option></select></label><label className="settings-check"><input type="checkbox" checked={wrap} onChange={event => setWrap(event.target.checked)} /> Word wrap</label></aside>}
     {folderPath && <aside className="file-sidebar"><div className="sidebar-title"><span>EXPLORER</span><span><button title="New file" onClick={() => void newExplorerFile()}>＋</button><button title="New folder" onClick={() => void newExplorerFolder()}>▱</button><button title="Refresh" onClick={() => void refreshExplorer()}>↻</button><button onClick={() => setFolderPath(null)}>×</button></span></div><input className="explorer-search" placeholder="Filter files" value={explorerQuery} onChange={event => setExplorerQuery(event.target.value)} /><div className="folder-name">{folderPath.split(/[\\/]/).pop() || folderPath}</div>{folderEntries.filter(entry => !explorerQuery || entry.name.toLowerCase().includes(explorerQuery.toLowerCase())).filter(entry => { let parent = entry.parent; while (parent !== folderPath) { if (!expandedFolders.has(parent)) return false; parent = parent.replace(/[\\/]?[^\\/]+$/, '') } return true }).map(entry => <div className="file-row" key={entry.path} onContextMenu={event => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, entry }) }}><button className="file-entry" style={{ paddingLeft: `${8 + entry.depth * 14}px` }} onClick={() => entry.isDirectory ? toggleFolder(entry.path) : void openFolderEntry(entry)}>{entry.isDirectory ? (expandedFolders.has(entry.path) ? '▾' : '▸') : <FileText size={14} />}{entry.name}</button><button className="file-action" onClick={() => void renameExplorerEntry(entry)}>✎</button><button className="file-action" onClick={() => void deleteExplorerEntry(entry)}>×</button></div>)}</aside>}
     {contextMenu && <div className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}><button onClick={() => { if (!contextMenu.entry.isDirectory) void openFolderEntry(contextMenu.entry); setContextMenu(null) }}>Open</button><button onClick={() => { void renameExplorerEntry(contextMenu.entry); setContextMenu(null) }}>Rename</button><button onClick={() => { void deleteExplorerEntry(contextMenu.entry); setContextMenu(null) }}>Delete</button></div>}
